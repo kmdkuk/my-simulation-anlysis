@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 import os
+import sys
 from enum import IntEnum
 
 
@@ -64,19 +65,21 @@ def latency(time, latency):
 def variance(time, latency):
     order = 1_000_000
     count = int(math.floor(get_max_time(time) / order))
-    summarized_time = np.arange(count)
-    summarized_variance = np.empty(count)
-    for i in summarized_time:
+    # summary秒で集約
+    summary = 1
+    summarized_time = np.arange(0, count, summary)
+    summarized_variance = np.empty(len(summarized_time))
+    for index, i in enumerate(summarized_time):
         time_seconds = i * order
         applicable_latency = latency[(
-            (time >= time_seconds) & (time < (time_seconds + order)))]
+            (time >= time_seconds) & (time < (time_seconds + (order*summary))))]
         if (len(applicable_latency) == 0):
             summarized_variance[i] = 0
             continue
         ave = sum(
             applicable_latency) / len(applicable_latency)
         squared_diff = [(i - ave) ** 2 for i in applicable_latency]
-        summarized_variance[i] = sum(squared_diff) / len(squared_diff)
+        summarized_variance[index] = sum(squared_diff) / len(squared_diff)
     return (summarized_time, summarized_variance)
 
 # 指定したサービスのログを抜き出す
@@ -109,7 +112,7 @@ def get_log_with_ip(log, service_name, ip):
 
 
 def load_file(file_name):
-    path = file_name + '.log'
+    path = 'arranged_log/'+file_name + '.log'
     log_time = {}
     log_latency = {}
     service_names = []
@@ -123,7 +126,7 @@ def load_file(file_name):
 
 
 def load_file_with_ip(file_name):
-    path = file_name + '.log'
+    path = 'arranged_log/'+file_name + '.log'
     # log_time["service_name"]["ip"]
     # log_latency["service_name"]["ip"]
     log_time = {}
@@ -149,17 +152,23 @@ def plot_std(file_name):
     # log[servicename][count][0] = time
     # log[servicename][count][1] = latency
     service_names, log_time, log_latency = load_file(file_name)
+    color = {
+        "serviceB": "#1f77b4",
+        "serviceA": "#ff7f0e",
+    }
     for service_name in service_names:
         x, y = variance(log_time[service_name], log_latency[service_name])
         y = y**0.5
         # プロット
-        plt.plot(x, y, label=service_name)
+        plt.plot(x, y, label=service_name, color=color[service_name])
 
     # 凡例の表示
     plt.legend()
 
+    plt.title('Change in Standard deviation of Latency')
+
     # ラベル名
-    plt.ylabel('Latency standard deviation (ms)')
+    plt.ylabel('Standard deviation of Latency (ms)')
     plt.xlabel('elapsed time (s)')
 
     makedir(file_name)
@@ -173,13 +182,19 @@ def plot_latency(file_name):
     # log[servicename][count][0] = time
     # log[servicename][count][1] = latency
     service_names, log_time, log_latency = load_file(file_name)
+    color = {
+        "serviceB": "#1f77b4",
+        "serviceA": "#ff7f0e",
+    }
     for service_name in service_names:
         x, y = latency(log_time[service_name], log_latency[service_name])
         # プロット
-        plt.plot(x, y, label=service_name)
+        plt.plot(x, y, label=service_name, color=color[service_name])
 
     # 凡例の表示
     plt.legend()
+
+    plt.title('Change in Latency')
 
     # ラベル名
     plt.ylabel('Service RTT (ms)')
@@ -205,7 +220,7 @@ def plot_ip_latency(file_name):
         # 凡例の表示
         plt.legend()
 
-        plt.title(service_name+'s latency')
+        plt.title('Change in Latency of ' + service_name)
 
         # ラベル名
         plt.ylabel('Service RTT (ms)')
@@ -223,7 +238,36 @@ def makedir(file_name):
     return
 
 
-file_name = 'log-100_latency'
+def arrange_log(file_name):
+    path = 'raw_log/'+file_name+'.log'
+
+    latency_log = 'arranged_log/'+file_name + '.log'
+    other_log = 'arranged_log/'+file_name + '_others.log'
+
+    latency_file = open(latency_log, mode='w')
+    other_file = open(other_log, mode='w')
+
+    with open(path) as f:
+        lines = [s.strip() for s in f.readlines()]
+        for l in lines:
+            s_l = l.split(' ')
+            if s_l[2] == "KmdEchoClientApplication:HandleRead():":
+                latency_file.write(l+'\n')
+            else:
+                other_file.write(l+'\n')
+
+    latency_file.close()
+    other_file.close()
+
+
+def get_file_name(file_path):
+    return os.path.splitext(os.path.basename(file_path))[0]
+
+
+args = sys.argv
+file_name = get_file_name(args[1])
+
+arrange_log(file_name)
 plot_latency(file_name)
 plot_ip_latency(file_name)
 plot_std(file_name)
