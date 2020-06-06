@@ -207,6 +207,39 @@ def plot_latency(file_name):
     return
 
 
+def plot_lands(file_name):
+    service_names, log_time, log_latency = load_file(file_name)
+    color = {
+        "latency": "#1f77b4",
+        "std": "#ff7f0e",
+    }
+    for service_name in service_names:
+        std_x, std_y = variance(
+            log_time[service_name], log_latency[service_name])
+        std_y = std_y ** 0.5
+        x, y = latency(log_time[service_name], log_latency[service_name])
+        plt.plot(x, y, label="latency",
+                 color=color["latency"])
+        # プロット
+        plt.plot(std_x, std_y, label="std",
+                 color=color["std"])
+        # 凡例の表示
+        plt.legend()
+
+        plt.title('Change in Standard deviation of Latency and std')
+
+        # ラベル名
+        plt.ylabel('Standard deviation of Latency and Latency (ms)')
+        plt.xlabel('elapsed time (s)')
+
+        makedir(file_name)
+        # プロット表示(設定の反映)
+        plt.savefig('figure/'+file_name + '/' +
+                    service_name+'-latency-and-std.png')
+        plt.clf()
+    return
+
+
 def plot_ip_latency(file_name):
     # log_time[service_name][ip]
     # log_latency[service_name][ip]
@@ -251,7 +284,10 @@ def arrange_log(file_name):
         lines = [s.strip() for s in f.readlines()]
         for l in lines:
             s_l = l.split(' ')
-            if s_l[2] == "KmdEchoClientApplication:HandleRead():":
+            if len(s_l) < LogColum.INFO:
+                other_file.write(l+'\n')
+                continue
+            if s_l[LogColum.FUNCTION] == "KmdEchoClientApplication:HandleRead():" and s_l[LogColum.INFO] == "[INFO":
                 latency_file.write(l+'\n')
             else:
                 other_file.write(l+'\n')
@@ -271,3 +307,4 @@ arrange_log(file_name)
 plot_latency(file_name)
 plot_ip_latency(file_name)
 plot_std(file_name)
+plot_lands(file_name)
